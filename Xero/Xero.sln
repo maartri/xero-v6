@@ -3,7 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.2.32630.192
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Xero", "Xero.csproj", "{1F2F2B2D-5B8F-4DCB-82AC-99684E51C330}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Xero", "Xero.csproj", "{1F2F2B2D-5B8F-4DCB-82AC-99684E51C330}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Xero.Core.Data", "..\Xero.Core.Data\Xero.Core.Data.csproj", "{1B59FC22-44AA-4884-8B6F-D459B5838EC5}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Xero.Core.Services", "..\Xero.Core.Services\Xero.Core.Services.csproj", "{FC0B3A1B-EF4F-47B5-BD58-053E38044C42}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +19,14 @@ Global
 		{1F2F2B2D-5B8F-4DCB-82AC-99684E51C330}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1F2F2B2D-5B8F-4DCB-82AC-99684E51C330}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1F2F2B2D-5B8F-4DCB-82AC-99684E51C330}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1B59FC22-44AA-4884-8B6F-D459B5838EC5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1B59FC22-44AA-4884-8B6F-D459B5838EC5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1B59FC22-44AA-4884-8B6F-D459B5838EC5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1B59FC22-44AA-4884-8B6F-D459B5838EC5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FC0B3A1B-EF4F-47B5-BD58-053E38044C42}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FC0B3A1B-EF4F-47B5-BD58-053E38044C42}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FC0B3A1B-EF4F-47B5-BD58-053E38044C42}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FC0B3A1B-EF4F-47B5-BD58-053E38044C42}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

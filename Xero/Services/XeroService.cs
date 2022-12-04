@@ -15,6 +15,9 @@ using Xero.NetStandard.OAuth2.Model.PayrollAu;
 using System.Linq;
 using Microsoft.Extensions.Configuration;
 
+using Xero.Helper;
+using Xero.Core.Services.Interfaces;
+
 namespace Xero.Services
 {
     public class XeroService : IXeroService
@@ -38,12 +41,18 @@ namespace Xero.Services
         private string xeroTenantId = "44622735-69af-4af9-af15-bb1534949f92";
 
         private IMemoryCache _cache;
+
         private readonly IConfiguration Configuration;
+        private readonly ITokenService _tokenS;
+
         public XeroService(
             IConfiguration configuration,
-            IMemoryCache cache)
+            IMemoryCache cache,
+            ITokenService tokenS)
         {
             _cache = cache;
+            _tokenS = tokenS;
+
             Configuration = configuration;
 
             _cache.TryGetValue("id_token", out id_token);
@@ -52,10 +61,20 @@ namespace Xero.Services
             //_cache.TryGetValue("tenant", out xeroTenantId);
         }
 
+        //public async Task<Tokens> GetCurrentToken()
+        //{
+        //    var logPath = Environment.CurrentDirectory;
+        //    var OutputFilePath = Path.Combine(logPath, "Output", "token.json");
+
+        //    return await JsonFileReader.ReadAsync<Tokens>(OutputFilePath);
+        //}
+
         public async Task<List<Tenant>> GetTenants()
         {
             var client = new HttpClient();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", access_token);
+            var currentToken = await _tokenS.GetTokensOnFile();
+
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", currentToken.AccessToken);
 
             var response = await client.GetAsync(ConnectionsUrl);
             var content = await response.Content.ReadAsStringAsync();
@@ -72,9 +91,14 @@ namespace Xero.Services
             var order = "EmailAddress%20DESC";
             var page = 56;
 
-            var apiInstance = new PayrollAuApi();
+            // Get RefreshTokens
+            var token = await _tokenS.GetRefreshTokens();
 
-            var result = await apiInstance.GetPayItemsAsync(access_token, xeroTenantId, null, where, order, page);
+            // Get Tenant
+            var tenantId = await GetApplicationTenant();
+
+            var apiInstance = new PayrollAuApi();
+            var result = await apiInstance.GetPayItemsAsync(token.AccessToken, tenantId, null, where, order, page);
 
             return result;
         }
@@ -86,8 +110,14 @@ namespace Xero.Services
                 var where = "Status==\"ACTIVE\"";
                 var order = "LastName ASC";
 
+                // Get RefreshTokens
+                var token = await _tokenS.GetRefreshTokens();
+
+                // Get Tenant
+                var tenantId = await GetApplicationTenant();
+
                 var apiInstance = new PayrollAuApi();
-                var result = await apiInstance.GetEmployeesAsync(access_token, xeroTenantId, null, where, order);
+                var result = await apiInstance.GetEmployeesAsync(token.AccessToken, tenantId, null, where, order);
                 return result;
             }
             catch (Exception ex)
@@ -156,11 +186,21 @@ namespace Xero.Services
 
         public async Task<Timesheets> PostTimesheet(List<Timesheet> timesheet)
         {
-            var tenantId = await GetApplicationTenant();
+           try
+            {
+                // Get RefreshTokens
+                var token = await _tokenS.GetRefreshTokens();
 
-            var apiInstance = new PayrollAuApi();
-            var result = await apiInstance.CreateTimesheetAsync(access_token, tenantId, timesheet);
-            return result;
+                // Get Tenant
+                var tenantId = await GetApplicationTenant();
+
+                var apiInstance = new PayrollAuApi();
+                var result = await apiInstance.CreateTimesheetAsync(token.AccessToken, tenantId, timesheet);
+                return result;
+            } catch(Exception ex)
+            {
+                throw new Exception(ex.ToString());
+            }
         }
 
         public async Task<PayrollCalendars> PostPayrollCalendar(List<PayrollCalendar> payrollCalendar)
@@ -234,6 +274,10 @@ namespace Xero.Services
             var tenantId = tenants.Where(x => x.Name == Configuration["XeroConfiguration:ApplicationName"].ToString()).Select(x => x.Id).FirstOrDefault();
             return tenantId;
         }
+
+        
+        
+
 
 
 

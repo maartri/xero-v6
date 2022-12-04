@@ -1,13 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
 using System.Net.Http;
 using Newtonsoft.Json.Linq;
+
 using Microsoft.Extensions.Caching.Memory;
 
 using Xero.Models;
@@ -21,6 +18,14 @@ using Xero.NetStandard.OAuth2.Model;
 using Xero.NetStandard.OAuth2.Model.PayrollAu;
 using Microsoft.Extensions.Configuration;
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+
+using Xero.Helper;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+
+using Xero.Core.Services.Interfaces;
 
 namespace Xero.Controllers
 {
@@ -46,16 +51,20 @@ namespace Xero.Controllers
 
         private IMemoryCache _cache;
         private readonly IXeroService _xeroS;
+        private readonly ITokenService _tokenS;
         private readonly IConfiguration Configuration;
 
         public XeroController(
                 IMemoryCache cache,
                 IXeroService xeroS,
-                IConfiguration configuration
+                IConfiguration configuration,
+                ITokenService tokenS
             )
         {
             _cache = cache;
             _xeroS = xeroS;
+            _tokenS = tokenS;
+
             Configuration = configuration;
 
             CLIENT_ID           = Configuration["XeroConfiguration:ClientId"].ToString();
@@ -87,42 +96,27 @@ namespace Xero.Controllers
             return Redirect(authLink);
         }
 
+        [HttpGet("generate-login-token")]
+        public async Task<IActionResult> GetGenerateLoginToken()
+        {
+            var secretKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("e-FU7uLzfe%qAGq9-e^qT6+yqkbN_$uuWuQ9xv"));
+            var signinCredentials = new SigningCredentials(secretKey, SecurityAlgorithms.HmacSha256);
+            var tokeOptions = new JwtSecurityToken(
+                   issuer: "https://localhost:44393/",
+                   audience: "https://localhost:44393/",
+                   claims: new List<Claim>(),
+                   expires: DateTime.Now.AddDays(5000),
+                   signingCredentials: signinCredentials
+               );
+            var tokenString = new JwtSecurityTokenHandler().WriteToken(tokeOptions);
+            return Ok(tokenString);
+        }
+
         [HttpGet("refresh-tokens")]
+        //[Authorize]
         public async Task<IActionResult> GetRefreshTokens()
         {
-            string refresh_token;
-            const string url = "https://identity.xero.com/connect/token";
-            var client = new HttpClient();
-            _cache.TryGetValue("refresh_token", out refresh_token);
-
-            var formContent = new FormUrlEncodedContent(new[]
-            {
-                new KeyValuePair<string, string>("grant_type", "refresh_token"),
-                new KeyValuePair<string, string>("client_id", CLIENT_ID),
-                new KeyValuePair<string, string>("refresh_token", refresh_token),
-            });
-
-            var cacheEntryOptions = new MemoryCacheEntryOptions()
-                .SetSlidingExpiration(TimeSpan.FromDays(1));
-
-            var response = await client.PostAsync(url, formContent);
-            var content = await response.Content.ReadAsStringAsync();
-            var tokens = JObject.Parse(content);
-
-
-            string access_token = tokens["access_token"]?.ToString();
-            _cache.Set("access_token", access_token, cacheEntryOptions);
-
-            string refresh_token_result = tokens["refresh_token"]?.ToString();
-            _cache.Set("refresh_token", refresh_token_result, cacheEntryOptions);
-
-             return Ok(new Tokens()
-            {
-                IdToken = null,
-                AccessToken = access_token,
-                RefreshToken = refresh_token,
-                //Tenants = tenants.Where(x => x.Name == APPLICATION_NAME).Select(x => x).ToList()
-            });
+            return Ok(await _tokenS.GetRefreshTokens());           
         }
 
         [HttpGet("callback")]
@@ -165,20 +159,28 @@ namespace Xero.Controllers
             string refresh_token = tokens["refresh_token"]?.ToString();
             _cache.Set("refresh_token", refresh_token, cacheEntryOptions);
 
-            return Ok(new Tokens()
+            var token = new Tokens()
             {
                 IdToken = id_token,
                 AccessToken = access_token,
-                RefreshToken = refresh_token,
-                //Tenants = tenants.Where(x => x.Name == APPLICATION_NAME).Select(x => x).ToList()
-            });
+                RefreshToken = refresh_token
+            };
+
+            var serializeJSON = Newtonsoft.Json.JsonConvert.SerializeObject(token);
+
+
+            var logPath = Environment.CurrentDirectory;
+            var OutputFilePath = Path.Combine(logPath, "Output", "token.json");
+
+            using (var writer = System.IO.File.CreateText(OutputFilePath))
+            {
+                writer.WriteLine(serializeJSON); 
+            }
+
+            return Ok(token);
         }
 
-        [HttpGet("hello")]
-        public ActionResult GoToCallBack()
-        {
-            return View();
-        }
+ 
 
         [HttpGet("tokens")]
         public async Task<IActionResult> GetTokens()
@@ -251,24 +253,9 @@ namespace Xero.Controllers
 
         //  api/xero/timesheet
         //  Add Payroll Calendar
-        [HttpPost("timesheet")]
-        public async Task<IActionResult> PostTimesheet([FromBody] Timesheet timesheet)
+        [HttpPost("timesheet/{dbname}")]
+        public async Task<IActionResult> PostTimesheet([FromBody] Timesheet timesheet, string dbname)
         {
-            //List<Timesheet> timesheet = new List<Timesheet>() {
-            //    new Timesheet(){
-            //        EmployeeID = Guid.Parse("80062955-9bc6-4c8e-8cb2-e86148d9923f"),
-            //        StartDate = DateTime.Now.AddMonths(-2),
-            //        EndDate = DateTime.Now.AddMonths(12),
-            //        Status = TimesheetStatus.DRAFT,
-            //        TimesheetLines = new List<TimesheetLine>() {
-            //            new TimesheetLine(){
-            //               EarningsRateID = Guid.Parse("146125ff-9611-4086-9b7c-fbe73b8ff706"),
-            //               NumberOfUnits = new List<double>(){ 0,8,8,8,8,8,0 }
-            //            }
-            //        }
-            //    }
-            //};
-
             List<Timesheet> timesheets = new List<Timesheet>() {
                 timesheet
             };
@@ -279,23 +266,6 @@ namespace Xero.Controllers
         [HttpPost("timesheets")]
         public async Task<IActionResult> PostTimesheets([FromBody] TimesheetsDto timesheet)
         {
-            //var employee = await _xeroS.GetEmployees();
-
-            //List<Timesheet> timesheet = new List<Timesheet>() {
-            //    new Timesheet(){
-            //        EmployeeID = employee._Employees.OrderBy(x => x.UpdatedDateUTC).Last().EmployeeID,
-            //        StartDate = new DateTime(2022,9,1),
-            //        EndDate = new DateTime(2022,9,14),
-            //        Status = TimesheetStatus.DRAFT,
-            //        TimesheetLines = new List<TimesheetLine>() {
-            //            new TimesheetLine(){
-            //               EarningsRateID = Guid.Parse("a7f3c2ec-fdd3-496c-bc14-1ad7e742f96a"),
-            //               NumberOfUnits = new List<double>(){ 0,8,8,8,8,8,0, 0, 8, 8, 8, 8, 8, 0 }
-            //            }
-            //        }
-            //    }
-            //};
-            //return Ok(true);
             return Ok(await _xeroS.PostTimesheet(timesheet.Timesheets));
         }
 
@@ -363,11 +333,5 @@ namespace Xero.Controllers
     }
 
 
-    public class Tokens
-    {
-        public string IdToken { get; set; }
-        public string AccessToken { get; set; }
-        public string RefreshToken { get; set; }
-        public List<Tenant> Tenants { get; set; }
-    }
+
 }
